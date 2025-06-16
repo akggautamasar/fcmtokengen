@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Get FCM Device Token</title>
+    <!-- Tailwind CSS CDN for easy styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 2rem;
+            border-radius: 1rem; /* Rounded corners */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            max-width: 90%;
+            width: 500px;
+            text-align: center;
+        }
+        button {
+            transition: all 0.2s ease-in-out;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+    </style>
+</head>
+<body>
+    <div class="container flex flex-col items-center p-8 space-y-6">
+        <h1 class="text-3xl font-bold text-gray-800 mb-4">Firebase FCM Token Retriever</h1>
+        <p class="text-gray-600 text-center mb-6">Click the button below to get your Firebase Cloud Messaging (FCM) device token. You might be prompted to grant notification permissions.</p>
+
+        <button id="getTokenButton" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75">
+            Get FCM Token
+        </button>
+
+        <div id="loadingIndicator" class="hidden mt-4 text-blue-500">
+            <svg class="animate-spin h-5 w-5 mr-3 inline-block" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Getting token...
+        </div>
+
+        <div id="resultBox" class="bg-gray-100 p-4 rounded-lg w-full mt-6 text-left">
+            <h2 class="text-xl font-semibold text-gray-700 mb-2">Your FCM Token:</h2>
+            <p id="fcmTokenDisplay" class="text-gray-800 break-all bg-gray-200 p-3 rounded-md min-h-[50px] flex items-center justify-center">
+                Click "Get FCM Token" to retrieve.
+            </p>
+            <p id="statusMessage" class="text-sm mt-2"></p>
+            <button id="copyTokenButton" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-75 mt-4 w-full hidden">
+                Copy Token
+            </button>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs - make sure to use the correct versions -->
+    <script type="module">
+        // Import the functions you need from the SDKs
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js";
+
+        // Your Firebase project configuration
+        // This configuration is typically generated when you create a web app in your Firebase project.
+        const firebaseConfig = {
+            apiKey: "AIzaSyBbyAD6CG1kR0iaSx7gLwT3TfUvzbzWEQs",
+            authDomain: "airmates-72301.firebaseapp.com",
+            projectId: "airmates-72301",
+            storageBucket: "airmates-72301.firebasestorage.app",
+            messagingSenderId: "957276653373",
+            appId: "1:957276653373:web:866e0c7db26c35aa6c6754",
+            measurementId: "G-7FVF90T0K0"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const messaging = getMessaging(app);
+
+        // Get references to DOM elements
+        const getTokenButton = document.getElementById('getTokenButton');
+        const fcmTokenDisplay = document.getElementById('fcmTokenDisplay');
+        const statusMessage = document.getElementById('statusMessage');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const copyTokenButton = document.getElementById('copyTokenButton');
+
+        // IMPORTANT: The VAPID key provided by the user has been added here.
+        // You can find your VAPID key in the Firebase console under Project settings -> Cloud Messaging -> Web configuration.
+        const VAPID_KEY = "BLJ11N2p_-8dzWIFrGRbS2Yi0Q2Jjhrb4WVtU0AlazAuQjKMzXqO8mMwmsE-VAtY8TL0hEi01GXiHKe8WJHPpKU"; 
+
+        // Function to request permission and get the FCM token
+        async function retrieveFcmToken() {
+            loadingIndicator.classList.remove('hidden');
+            fcmTokenDisplay.textContent = 'Attempting to get token...';
+            statusMessage.textContent = '';
+            copyTokenButton.classList.add('hidden');
+
+            // Check current notification permission status first
+            console.log("Current Notification Permission:", Notification.permission);
+            if (Notification.permission === 'denied') {
+                statusMessage.textContent = 'Notification permission is currently DENIED. Please enable it in your browser settings.';
+                fcmTokenDisplay.textContent = 'Permission denied by user or browser.';
+                loadingIndicator.classList.add('hidden');
+                return; // Exit if denied
+            }
+            if (Notification.permission === 'granted') {
+                statusMessage.textContent = 'Notification permission is already GRANTED. Attempting to retrieve token.';
+            }
+
+
+            try {
+                // Request notification permission from the user
+                // NOTE: For web push notifications to work, your website MUST be served over HTTPS.
+                // Browsers will often block Notification.requestPermission() on insecure (HTTP) origins.
+                const permission = await Notification.requestPermission();
+
+                if (permission === 'granted') {
+                    statusMessage.textContent = 'Notification permission granted!';
+
+                    // Get the FCM registration token
+                    const currentToken = await getToken(messaging, { vapidKey: VAPID_KEY });
+
+                    if (currentToken) {
+                        fcmTokenDisplay.textContent = currentToken;
+                        statusMessage.textContent = 'FCM Token retrieved successfully!';
+                        copyTokenButton.classList.remove('hidden');
+                    } else {
+                        // This case can happen if permission is granted but there's another issue
+                        // (e.g., VAPID key mismatch, network issues, service worker issues in a real deployment).
+                        fcmTokenDisplay.textContent = 'No FCM registration token available. Make sure your browser allows notifications.';
+                        statusMessage.textContent = 'Failed to get token. Check browser permissions and VAPID key, or try on HTTPS.';
+                    }
+                } else if (permission === 'denied') {
+                    fcmTokenDisplay.textContent = 'Notification permission denied. Cannot get FCM token.';
+                    statusMessage.textContent = 'Permission denied. Please enable notifications for this site in your browser settings.';
+                } else { // 'default'
+                    fcmTokenDisplay.textContent = 'Notification permission not granted. Cannot get FCM token.';
+                    statusMessage.textContent = 'Permission not granted. Please click "Get FCM Token" again and allow notifications. Ensure you are on HTTPS.';
+                }
+            } catch (error) {
+                console.error('Error getting FCM token:', error);
+                fcmTokenDisplay.textContent = 'Error retrieving token. See console for details.';
+                statusMessage.textContent = `Error: ${error.message}. Ensure your site is on HTTPS.`;
+            } finally {
+                loadingIndicator.classList.add('hidden');
+            }
+        }
+
+        // Event listener for the button
+        getTokenButton.addEventListener('click', retrieveFcmToken);
+
+        // Event listener for copying the token to clipboard
+        copyTokenButton.addEventListener('click', () => {
+            const token = fcmTokenDisplay.textContent;
+            if (token && token !== 'Click "Get FCM Token" to retrieve.' && token !== 'Error retrieving token. See console for details.') {
+                // Use document.execCommand('copy') for better compatibility in iframe environments
+                const tempInput = document.createElement('textarea');
+                tempInput.value = token;
+                document.body.appendChild(tempInput);
+                tempInput.select();
+                try {
+                    document.execCommand('copy');
+                    statusMessage.textContent = 'FCM Token copied to clipboard!';
+                } catch (err) {
+                    console.error('Failed to copy text: ', err);
+                    statusMessage.textContent = 'Failed to copy token.';
+                } finally {
+                    document.body.removeChild(tempInput);
+                }
+            }
+        });
+
+        // Optional: Listen for incoming messages while the app is in the foreground
+        onMessage(messaging, (payload) => {
+            console.log('Message received. ', payload);
+            // You can add logic here to display the notification or handle the data payload
+            statusMessage.textContent = `New message received: ${payload.notification.title || 'No Title'}`;
+            // For a real app, you'd show a custom notification here, as default notifications
+            // don't appear when the app is in the foreground.
+        });
+
+    </script>
+</body>
+</html>
